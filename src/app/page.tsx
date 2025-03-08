@@ -2,11 +2,8 @@
 
 import { Card } from '@/components/ui/card'
 import { ProfileCard } from '@/components/ProfileCard'
-import { useSession } from 'next-auth/react'
 
 export default function Home() {
-  const { data: session } = useSession()
-
   return (
     <main className="min-h-screen bg-gradient-to-br from-purple-500/10 via-transparent to-blue-500/10 dark:from-purple-900/10 dark:to-blue-900/10 flex items-center justify-center p-4 relative">
       {/* Polka dot background */}
@@ -15,7 +12,7 @@ export default function Home() {
       {/* Main content */}
       <div className="w-full max-w-md relative">
         <Card className="backdrop-blur-sm bg-white/80 dark:bg-gray-900/80 border-0 shadow-2xl overflow-hidden">
-          <ProfileCard isAdmin={session?.user?.isAdmin ?? false} />
+          <ProfileCard />
         </Card>
       </div>
     </main>

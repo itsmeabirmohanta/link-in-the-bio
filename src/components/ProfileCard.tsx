@@ -8,26 +8,28 @@ import SettingsPanel from '@/components/SettingsPanel'
 import { Profile } from '@/types/social'
 import { Button } from '@/components/ui/button'
 import { Icon } from '@iconify/react'
-import { signIn } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { LoadingSpinner } from './LoadingSpinner'
 import { ErrorBoundary } from './ErrorBoundary'
 
-interface ProfileCardProps {
-  isAdmin: boolean
-}
-
-export function ProfileCard({ isAdmin }: ProfileCardProps) {
+export function ProfileCard() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [profile, setProfile] = useState<Profile>(defaultProfile)
   const [isLoading, setIsLoading] = useState(true)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const router = useRouter()
 
   useEffect(() => {
     try {
       const savedProfile = localStorage.getItem('profile')
+      const authStatus = localStorage.getItem('isAuthenticated')
+      
       if (savedProfile) {
         setProfile(JSON.parse(savedProfile))
       }
+      
+      setIsAuthenticated(authStatus === 'true')
     } catch (error) {
       console.error('Error loading profile:', error)
     } finally {
@@ -47,11 +49,18 @@ export function ProfileCard({ isAdmin }: ProfileCardProps) {
   }
 
   const handleSettingsClick = () => {
-    if (!isAdmin) {
-      signIn('github')
+    if (!isAuthenticated) {
+      router.push('/auth/signin')
       return
     }
     setIsSettingsOpen(true)
+  }
+
+  const handleSignOut = () => {
+    localStorage.removeItem('isAuthenticated')
+    setIsAuthenticated(false)
+    setIsSettingsOpen(false)
+    toast.success('Signed out successfully')
   }
 
   if (isLoading) {
@@ -80,6 +89,23 @@ export function ProfileCard({ isAdmin }: ProfileCardProps) {
             <Icon icon="solar:settings-linear" className="h-5 w-5" />
           </Button>
         </motion.div>
+
+        {isAuthenticated && (
+          <motion.div
+            className="absolute top-4 right-16 z-40"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-10 w-10 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm"
+              onClick={handleSignOut}
+            >
+              <Icon icon="solar:logout-linear" className="h-5 w-5" />
+            </Button>
+          </motion.div>
+        )}
 
         <div className="p-8">
           <motion.div
@@ -112,37 +138,34 @@ export function ProfileCard({ isAdmin }: ProfileCardProps) {
             <p className="text-gray-600 dark:text-gray-400 mb-8">{profile.bio}</p>
 
             {/* Social Links */}
-            <div className="space-y-3">
-              {profile.links.map((link) => (
-                <motion.div
-                  key={link.id}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
+            <div className="grid grid-cols-2 gap-4">
+              {profile.links.map((link, index) => (
+                <motion.a
+                  key={index}
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 p-3 rounded-lg bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm hover:bg-white/70 dark:hover:bg-gray-800/70 transition-all duration-200"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                 >
-                  <a
-                    href={link.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block w-full"
-                  >
-                    <div className="p-4 flex items-center gap-3 rounded-lg bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm hover:bg-white/70 dark:hover:bg-gray-800/70 transition-colors border border-gray-200/50 dark:border-gray-700/50">
-                      <Icon icon={link.icon} className="h-5 w-5" style={{ color: link.backgroundColor }} />
-                      <span className="text-base font-medium">{link.title}</span>
-                    </div>
-                  </a>
-                </motion.div>
+                  <Icon icon={link.icon} className="h-5 w-5" />
+                  <span className="font-medium">{link.title}</span>
+                </motion.a>
               ))}
             </div>
           </motion.div>
         </div>
 
         {/* Settings Panel */}
-        <SettingsPanel
-          profile={profile}
-          onUpdate={handleProfileUpdate}
-          onClose={() => setIsSettingsOpen(false)}
-          isOpen={isSettingsOpen}
-        />
+        {isAuthenticated && (
+          <SettingsPanel
+            profile={profile}
+            onUpdate={handleProfileUpdate}
+            onClose={() => setIsSettingsOpen(false)}
+            isOpen={isSettingsOpen}
+          />
+        )}
       </div>
     </ErrorBoundary>
   )
