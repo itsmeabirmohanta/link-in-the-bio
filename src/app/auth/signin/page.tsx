@@ -1,14 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Lock, ArrowLeft, Eye, EyeOff } from 'lucide-react'
+import { Lock, ArrowLeft, Eye, EyeOff, Check, X } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { encrypt } from '@/lib/crypto'
+import { validatePassword, type PasswordStrength } from '@/lib/validation'
 
 export default function SignIn() {
   const [username, setUsername] = useState('')
@@ -18,7 +19,16 @@ export default function SignIn() {
   const [rememberMe, setRememberMe] = useState(false)
   const [isResetting, setIsResetting] = useState(false)
   const [resetEmail, setResetEmail] = useState('')
+  const [passwordStrength, setPasswordStrength] = useState<PasswordStrength | null>(null)
   const router = useRouter()
+
+  useEffect(() => {
+    if (password) {
+      setPasswordStrength(validatePassword(password))
+    } else {
+      setPasswordStrength(null)
+    }
+  }, [password])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -55,13 +65,23 @@ export default function SignIn() {
     setIsLoading(true)
 
     try {
-      // In a real app, you would send a reset email here
-      // For this demo, we'll just show a success message
-      toast.success('If this email is registered, you will receive reset instructions')
-      setIsResetting(false)
-      setResetEmail('')
+      const response = await fetch('/api/auth/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: resetEmail })
+      })
+
+      const data = await response.json()
+      
+      if (data.success) {
+        toast.success(data.message)
+        setIsResetting(false)
+        setResetEmail('')
+      } else {
+        toast.error(data.message)
+      }
     } catch (error) {
-      toast.error('An error occurred')
+      toast.error('Failed to send reset instructions')
     } finally {
       setIsLoading(false)
     }
@@ -93,22 +113,56 @@ export default function SignIn() {
                   className="h-12"
                 />
               </div>
-              <div className="space-y-2 relative">
-                <Input
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="h-12 pr-12"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-3.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-                >
-                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                </button>
+              <div className="space-y-2">
+                <div className="relative">
+                  <Input
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className="h-12 pr-12"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-3.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                  >
+                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
+                </div>
+                {passwordStrength && (
+                  <div className="space-y-2 text-sm">
+                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-red-500 via-yellow-500 to-green-500 transition-all duration-300"
+                        style={{ width: `${passwordStrength.score}%` }}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
+                        {passwordStrength.hasMinLength ? <Check size={14} className="text-green-500" /> : <X size={14} className="text-red-500" />}
+                        <span>8+ characters</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
+                        {passwordStrength.hasUpperCase ? <Check size={14} className="text-green-500" /> : <X size={14} className="text-red-500" />}
+                        <span>Uppercase</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
+                        {passwordStrength.hasLowerCase ? <Check size={14} className="text-green-500" /> : <X size={14} className="text-red-500" />}
+                        <span>Lowercase</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
+                        {passwordStrength.hasNumber ? <Check size={14} className="text-green-500" /> : <X size={14} className="text-red-500" />}
+                        <span>Number</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
+                        {passwordStrength.hasSpecialChar ? <Check size={14} className="text-green-500" /> : <X size={14} className="text-red-500" />}
+                        <span>Special char</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="flex items-center justify-between text-sm">
                 <label className="flex items-center space-x-2 cursor-pointer">
@@ -131,7 +185,7 @@ export default function SignIn() {
               <Button
                 type="submit"
                 size="lg"
-                disabled={isLoading}
+                disabled={isLoading || (passwordStrength && !passwordStrength.isValid)}
                 className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center gap-3 py-6"
               >
                 {isLoading ? 'Signing in...' : 'Sign In'}
