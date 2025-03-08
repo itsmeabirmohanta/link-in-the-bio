@@ -7,10 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Icon } from '@iconify/react';
-import { X, Upload, LogOut, Check } from 'lucide-react';
+import { X, Upload, Check } from 'lucide-react';
 import { ChangeEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { signOut } from 'next-auth/react';
 import { toast } from 'sonner';
 import Image from 'next/image';
 import ReactCrop, { Crop as CropType } from 'react-image-crop';
@@ -23,415 +22,267 @@ interface SettingsPanelProps {
   isOpen: boolean;
 }
 
-const ImageComponent = ({ src, alt, className }: { src: string; alt: string; className?: string }) => {
-  const imgRef = useRef<HTMLImageElement>(null);
-  return (
-    <div className={className}>
-      <Image
-        ref={imgRef}
-        src={src}
-        alt={alt}
-        fill
-        className="object-contain"
-        unoptimized
-      />
-    </div>
-  );
-};
-
 export default function SettingsPanel({ profile, onUpdate, onClose, isOpen }: SettingsPanelProps) {
-  const [localProfile, setLocalProfile] = useState<Profile>(profile);
-  const [mounted, setMounted] = useState(false);
-  const [imageLoading, setImageLoading] = useState(false);
+  const [editedProfile, setEditedProfile] = useState<Profile>(profile);
   const [tempImage, setTempImage] = useState<string | null>(null);
+  const [isCropping, setIsCropping] = useState(false);
   const [crop, setCrop] = useState<CropType>({
     unit: '%',
     width: 100,
     height: 100,
     x: 0,
-    y: 0
+    y: 0,
   });
-  const [isCropping, setIsCropping] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const imgRef = useRef<HTMLImageElement>(null);
 
-  // Mount check for client-side portal rendering
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    setEditedProfile(profile);
+  }, [profile]);
 
-  const handleProfileUpdate = (field: keyof Profile, value: string) => {
-    setLocalProfile(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleLinkUpdate = (id: string, field: keyof SocialLink, value: string) => {
-    const updatedLinks = localProfile.links.map(link =>
-      link.id === id ? { ...link, [field]: value } : link
-    );
-    setLocalProfile({ ...localProfile, links: updatedLinks });
-  };
-
-  const getCroppedImg = (image: HTMLImageElement, crop: CropType): Promise<string> => {
-    const canvas = document.createElement('canvas');
-    const scaleX = image.naturalWidth / image.width;
-    const scaleY = image.naturalHeight / image.height;
-    const size = 400; // Target size for the cropped image
-    
-    canvas.width = size;
-    canvas.height = size;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('No 2d context');
-
-    ctx.drawImage(
-      image,
-      crop.x * scaleX,
-      crop.y * scaleY,
-      crop.width * scaleX,
-      crop.height * scaleY,
-      0,
-      0,
-      size,
-      size
-    );
-
-    return new Promise((resolve) => {
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          console.error('Canvas is empty');
-          return;
-        }
-        const reader = new FileReader();
-        reader.readAsDataURL(blob);
-        reader.onloadend = () => {
-          resolve(reader.result as string);
-        };
-      }, 'image/jpeg', 0.95);
-    });
-  };
-
-  const handleImageUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please upload an image file');
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('File size should be less than 5MB');
-      return;
-    }
-
-    try {
-      setImageLoading(true);
+    if (file) {
       const reader = new FileReader();
       reader.onload = () => {
         setTempImage(reader.result as string);
         setIsCropping(true);
-        setImageLoading(false);
       };
       reader.readAsDataURL(file);
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      toast.error('Failed to upload image');
-      setImageLoading(false);
     }
+  };
+
+  const getCroppedImage = async (sourceImage: string, cropConfig: CropType): Promise<string> => {
+    const image = new Image();
+    image.src = sourceImage;
+    
+    return new Promise((resolve) => {
+      image.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve(sourceImage);
+
+        const scaleX = image.naturalWidth / image.width;
+        const scaleY = image.naturalHeight / image.height;
+        const pixelRatio = window.devicePixelRatio;
+
+        canvas.width = cropConfig.width * scaleX;
+        canvas.height = cropConfig.height * scaleY;
+
+        ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+        ctx.imageSmoothingQuality = 'high';
+
+        ctx.drawImage(
+          image,
+          cropConfig.x * scaleX,
+          cropConfig.y * scaleY,
+          cropConfig.width * scaleX,
+          cropConfig.height * scaleY,
+          0,
+          0,
+          cropConfig.width * scaleX,
+          cropConfig.height * scaleY
+        );
+
+        resolve(canvas.toDataURL('image/jpeg', 0.9));
+      };
+    });
   };
 
   const handleCropComplete = async () => {
-    if (!imgRef.current || !tempImage) return;
-
-    try {
-      setImageLoading(true);
-      const croppedImageUrl = await getCroppedImg(imgRef.current, crop);
-      handleProfileUpdate('avatar', croppedImageUrl);
+    if (tempImage) {
+      const croppedImage = await getCroppedImage(tempImage, crop);
+      setEditedProfile(prev => ({ ...prev, avatar: croppedImage }));
       setTempImage(null);
       setIsCropping(false);
-      toast.success('Profile picture updated');
-    } catch (error) {
-      console.error('Error cropping image:', error);
-      toast.error('Failed to crop image');
-    } finally {
-      setImageLoading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
     }
   };
 
-  const removeLink = (id: string) => {
-    const updatedLinks = localProfile.links.filter(link => link.id !== id);
-    setLocalProfile({ ...localProfile, links: updatedLinks });
-  };
-
   const handleSave = () => {
-    onUpdate(localProfile);
+    onUpdate(editedProfile);
     onClose();
   };
 
-  const handleLogout = () => {
-    signOut({ callbackUrl: '/' });
-  };
-
-  const modalContent = (
+  return createPortal(
     <AnimatePresence>
       {isOpen && (
-        <>
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
           {/* Backdrop */}
           <motion.div
-            key="backdrop"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]"
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
           />
 
-          {/* Modal */}
+          {/* Panel */}
           <motion.div
-            key="modal"
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            transition={{ type: "spring", duration: 0.3 }}
-            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg max-h-[90vh] overflow-y-auto bg-white dark:bg-gray-900 rounded-xl shadow-2xl z-[101]"
-            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-white dark:bg-gray-900 rounded-lg shadow-xl mx-4"
           >
-            <div className="p-6 space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-semibold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
-                  Edit Profile
-                </h2>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleLogout}
-                    className="hover:bg-red-100 dark:hover:bg-red-900/20 rounded-full text-red-600 dark:text-red-400"
-                  >
-                    <LogOut className="h-5 w-5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={onClose}
-                    className="hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full"
-                  >
-                    <X className="h-5 w-5" />
-                  </Button>
+            {/* Header */}
+            <div className="sticky top-0 z-10 flex items-center justify-between p-4 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
+              <h2 className="text-xl font-semibold">Edit Profile</h2>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onClose}
+                className="hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full"
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+
+            {/* Content */}
+            <div className="p-4 space-y-6">
+              {/* Profile Picture */}
+              <div className="space-y-4">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Profile Picture
+                </label>
+                <div className="flex items-center gap-4">
+                  <div className="relative w-24 h-24">
+                    <Image
+                      src={editedProfile.avatar}
+                      alt={editedProfile.name}
+                      width={96}
+                      height={96}
+                      className="rounded-full object-cover ring-2 ring-purple-500/20"
+                      priority
+                      unoptimized
+                    />
+                  </div>
+                  <div>
+                    <label className="cursor-pointer">
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                      />
+                      <Button variant="outline" className="gap-2">
+                        <Upload className="h-4 w-4" />
+                        Upload Image
+                      </Button>
+                    </label>
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">Profile Picture</label>
-                  <div className="flex items-center gap-4">
-                    {isCropping ? (
-                      <div className="w-full space-y-4">
-                        <div className="max-w-full overflow-hidden rounded-lg">
-                          <ReactCrop
-                            crop={crop}
-                            onChange={c => setCrop(c)}
-                            aspect={1}
-                            circularCrop
-                          >
-                            <div className="relative w-full h-[400px]">
-                              <Image
-                                ref={imgRef}
-                                src={tempImage || ''}
-                                alt="Crop preview"
-                                fill
-                                className="object-contain"
-                                unoptimized
-                              />
-                            </div>
-                          </ReactCrop>
-                        </div>
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="outline"
-                            onClick={() => {
-                              setTempImage(null);
-                              setIsCropping(false);
-                            }}
-                          >
-                            Cancel
-                          </Button>
-                          <Button
-                            onClick={handleCropComplete}
-                            className="bg-gradient-to-r from-purple-600 to-blue-600 text-white"
-                          >
-                            <Check className="h-4 w-4 mr-2" />
-                            Apply Crop
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="relative w-20 h-20">
-                          <div className="absolute inset-0 rounded-full overflow-hidden">
-                            <Image
-                              src={localProfile.avatar}
-                              alt={localProfile.name}
-                              fill
-                              className="object-cover"
-                              unoptimized
-                            />
-                          </div>
-                          {imageLoading && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/20 rounded-full">
-                              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex-1">
-                          <input
-                            type="file"
-                            ref={fileInputRef}
-                            onChange={handleImageUpload}
-                            accept="image/*"
-                            className="hidden"
-                          />
-                          <Button
-                            variant="outline"
-                            className="w-full"
-                            onClick={() => fileInputRef.current?.click()}
-                            disabled={imageLoading}
-                          >
-                            <Upload className="h-4 w-4 mr-2" />
-                            {imageLoading ? 'Processing...' : 'Upload Image'}
-                          </Button>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                            Upload an image to crop and set as your profile picture.
-                          </p>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">Name</label>
-                  <Input
-                    value={localProfile.name}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => handleProfileUpdate('name', e.target.value)}
-                    placeholder="Your Name"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">Bio</label>
-                  <Textarea
-                    value={localProfile.bio}
-                    onChange={(e: ChangeEvent<HTMLTextAreaElement>) => handleProfileUpdate('bio', e.target.value)}
-                    placeholder="Tell us about yourself"
-                    rows={3}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">Social Links</label>
-                  <div className="space-y-3">
-                    {localProfile.links.map((link) => (
-                      <div key={link.id} className="flex gap-3">
-                        <Input
-                          value={link.title}
-                          onChange={(e: ChangeEvent<HTMLInputElement>) => handleLinkUpdate(link.id, 'title', e.target.value)}
-                          placeholder="Link Title"
-                        />
-                        <Input
-                          value={link.url}
-                          onChange={(e: ChangeEvent<HTMLInputElement>) => handleLinkUpdate(link.id, 'url', e.target.value)}
-                          placeholder="URL"
-                        />
-                        <Input
-                          value={link.icon}
-                          onChange={(e: ChangeEvent<HTMLInputElement>) => handleLinkUpdate(link.id, 'icon', e.target.value)}
-                          placeholder="Icon name"
-                        />
-                        <Button
-                          variant="destructive"
-                          size="icon"
-                          onClick={() => removeLink(link.id)}
-                          className="shrink-0"
+              {/* Image Cropper */}
+              {isCropping && tempImage && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                  <div className="bg-white dark:bg-gray-900 p-4 rounded-lg shadow-xl max-w-2xl w-full mx-4">
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-semibold">Crop Image</h3>
+                      <div className="max-h-[60vh] overflow-hidden">
+                        <ReactCrop
+                          crop={crop}
+                          onChange={c => setCrop(c)}
+                          aspect={1}
+                          circularCrop
                         >
-                          <Icon icon="solar:trash-bin-trash-linear" className="h-4 w-4" />
+                          <img src={tempImage} alt="Crop preview" />
+                        </ReactCrop>
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setTempImage(null);
+                            setIsCropping(false);
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                        <Button onClick={handleCropComplete}>
+                          <Check className="h-4 w-4 mr-2" />
+                          Apply
                         </Button>
                       </div>
-                    ))}
+                    </div>
                   </div>
-                  <Button
-                    variant="outline"
-                    className="mt-3 w-full"
-                    onClick={() => {
-                      const newLink = {
-                        id: Date.now().toString(),
-                        title: '',
-                        url: '',
-                        icon: '',
-                        backgroundColor: '#ffffff'
-                      };
-                      setLocalProfile({
-                        ...localProfile,
-                        links: [...localProfile.links, newLink],
-                      });
-                    }}
-                  >
-                    Add Link
-                  </Button>
                 </div>
+              )}
+
+              {/* Name */}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Name
+                </label>
+                <Input
+                  value={editedProfile.name}
+                  onChange={(e) => setEditedProfile(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="Your name"
+                />
               </div>
 
-              <div className="flex gap-3 pt-4 border-t dark:border-gray-800">
-                <Button
-                  className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white"
-                  onClick={handleSave}
-                >
-                  Save Changes
-                </Button>
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={onClose}
-                >
-                  Cancel
-                </Button>
+              {/* Bio */}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Bio
+                </label>
+                <Textarea
+                  value={editedProfile.bio}
+                  onChange={(e) => setEditedProfile(prev => ({ ...prev, bio: e.target.value }))}
+                  placeholder="Tell us about yourself"
+                  rows={3}
+                />
               </div>
+
+              {/* Social Links */}
+              <div className="space-y-4">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Social Links
+                </label>
+                {editedProfile.links.map((link, index) => (
+                  <div key={index} className="flex gap-2">
+                    <Input
+                      value={link.title}
+                      onChange={(e) => {
+                        const newLinks = [...editedProfile.links];
+                        newLinks[index] = { ...link, title: e.target.value };
+                        setEditedProfile(prev => ({ ...prev, links: newLinks }));
+                      }}
+                      placeholder="Title"
+                    />
+                    <Input
+                      value={link.url}
+                      onChange={(e) => {
+                        const newLinks = [...editedProfile.links];
+                        newLinks[index] = { ...link, url: e.target.value };
+                        setEditedProfile(prev => ({ ...prev, links: newLinks }));
+                      }}
+                      placeholder="URL"
+                    />
+                    <Input
+                      value={link.icon}
+                      onChange={(e) => {
+                        const newLinks = [...editedProfile.links];
+                        newLinks[index] = { ...link, icon: e.target.value };
+                        setEditedProfile(prev => ({ ...prev, links: newLinks }));
+                      }}
+                      placeholder="Icon"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="sticky bottom-0 z-10 flex justify-end gap-2 p-4 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
+              <Button variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button onClick={handleSave}>
+                Save Changes
+              </Button>
             </div>
           </motion.div>
-
-          {tempImage && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg max-w-md w-full">
-                <div className="relative aspect-square mb-4">
-                  <Image
-                    src={tempImage}
-                    alt="Crop preview"
-                    fill
-                    className="object-contain"
-                    unoptimized
-                  />
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setTempImage(null)}>
-                    Cancel
-                  </Button>
-                  <Button onClick={handleCropComplete}>
-                    Apply Crop
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
-        </>
+        </div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
-
-  if (!mounted) return null;
-
-  // Render using portal
-  return createPortal(modalContent, document.body);
 } 
