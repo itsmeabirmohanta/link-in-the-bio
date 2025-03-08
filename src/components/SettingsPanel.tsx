@@ -47,9 +47,9 @@ export default function SettingsPanel({ profile, onUpdate, onClose, isOpen }: Se
       return;
     }
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image size should be less than 5MB');
+    // Validate file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Image size should be less than 2MB');
       return;
     }
 
@@ -70,23 +70,54 @@ export default function SettingsPanel({ profile, onUpdate, onClose, isOpen }: Se
 
       reader.readAsDataURL(file);
       const imageData = await loadImage;
-      
-      // Validate that the image loads correctly
+
+      // Pre-process image to ensure it's not too large
       const img = new Image();
       await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve();
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            const MAX_WIDTH = 800;
+            const MAX_HEIGHT = 800;
+            let width = img.width;
+            let height = img.height;
+
+            if (width > height) {
+              if (width > MAX_WIDTH) {
+                height *= MAX_WIDTH / width;
+                width = MAX_WIDTH;
+              }
+            } else {
+              if (height > MAX_HEIGHT) {
+                width *= MAX_HEIGHT / height;
+                height = MAX_HEIGHT;
+              }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+
+            const ctx = canvas.getContext('2d');
+            if (!ctx) throw new Error('Failed to get canvas context');
+
+            ctx.drawImage(img, 0, 0, width, height);
+            const resizedImage = canvas.toDataURL('image/jpeg', 0.8);
+            setTempImage(resizedImage);
+            setIsCropping(true);
+            setCrop({
+              unit: '%',
+              width: 100,
+              height: 100,
+              x: 0,
+              y: 0,
+            });
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
+        };
         img.onerror = () => reject(new Error('Invalid image format'));
         img.src = imageData;
-      });
-
-      setTempImage(imageData);
-      setIsCropping(true);
-      setCrop({
-        unit: '%',
-        width: 100,
-        height: 100,
-        x: 0,
-        y: 0,
       });
     } catch (error) {
       console.error('Error uploading image:', error);
@@ -107,16 +138,19 @@ export default function SettingsPanel({ profile, onUpdate, onClose, isOpen }: Se
             return;
           }
 
+          // Calculate dimensions
           const scaleX = image.naturalWidth / image.width;
           const scaleY = image.naturalHeight / image.height;
-          const pixelRatio = window.devicePixelRatio;
 
+          // Set canvas size to the cropped size
           canvas.width = Math.floor(cropConfig.width * scaleX);
           canvas.height = Math.floor(cropConfig.height * scaleY);
 
-          ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+          // Ensure high-quality downscaling
           ctx.imageSmoothingQuality = 'high';
+          ctx.imageSmoothingEnabled = true;
 
+          // Draw the cropped image
           ctx.drawImage(
             image,
             cropConfig.x * scaleX,
@@ -125,12 +159,12 @@ export default function SettingsPanel({ profile, onUpdate, onClose, isOpen }: Se
             cropConfig.height * scaleY,
             0,
             0,
-            cropConfig.width * scaleX,
-            cropConfig.height * scaleY
+            canvas.width,
+            canvas.height
           );
 
-          // Convert to WebP for better compression while maintaining quality
-          const croppedImage = canvas.toDataURL('image/webp', 0.9);
+          // Convert to JPEG for better compression
+          const croppedImage = canvas.toDataURL('image/jpeg', 0.85);
           
           // Validate the output
           if (!croppedImage.startsWith('data:image/')) {
@@ -154,6 +188,13 @@ export default function SettingsPanel({ profile, onUpdate, onClose, isOpen }: Se
 
     try {
       const croppedImage = await getCroppedImage(tempImage, crop);
+      
+      // Validate the cropped image size
+      const base64Size = croppedImage.length * 0.75; // Approximate size in bytes
+      if (base64Size > 2 * 1024 * 1024) { // 2MB limit
+        throw new Error('Cropped image is too large. Please try a smaller selection.');
+      }
+
       setEditedProfile(prev => ({ ...prev, avatar: croppedImage }));
       setTempImage(null);
       setIsCropping(false);
