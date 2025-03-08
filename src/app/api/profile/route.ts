@@ -1,68 +1,49 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
 import { Profile } from '@/types/social';
-
-const PROFILE_FILE = path.join(process.cwd(), 'data', 'profile.json');
 
 // Default profile data
 const defaultProfile = {
-  name: 'Abir Mohanta',
-  bio: 'Frontend Developer | UI/UX Designer | Graphic Designer',
-  avatar: 'https://avatars.githubusercontent.com/u/76041181?v=4',
+  name: process.env.NEXT_PUBLIC_PROFILE_NAME || 'Abir Mohanta',
+  bio: process.env.NEXT_PUBLIC_PROFILE_BIO || 'Frontend Developer | UI/UX Designer | Graphic Designer',
+  avatar: process.env.NEXT_PUBLIC_PROFILE_AVATAR || 'https://avatars.githubusercontent.com/u/76041181?v=4',
   links: [
     {
       id: '1',
       title: 'GitHub',
-      url: 'https://github.com/AbirMohanta',
+      url: process.env.NEXT_PUBLIC_GITHUB_URL || 'https://github.com/AbirMohanta',
       icon: 'mdi:github',
       backgroundColor: '#333333',
     },
     {
       id: '2',
       title: 'LinkedIn',
-      url: 'https://www.linkedin.com/in/abir-mohanta-b5b2b7200/',
+      url: process.env.NEXT_PUBLIC_LINKEDIN_URL || 'https://www.linkedin.com/in/abir-mohanta-b5b2b7200/',
       icon: 'mdi:linkedin',
       backgroundColor: '#0077B5',
     },
     {
       id: '3',
       title: 'Instagram',
-      url: 'https://www.instagram.com/itsmeabirmohanta/',
+      url: process.env.NEXT_PUBLIC_INSTAGRAM_URL || 'https://www.instagram.com/itsmeabirmohanta/',
       icon: 'mdi:instagram',
       backgroundColor: '#E4405F',
     },
     {
       id: '4',
       title: 'Twitter',
-      url: 'https://twitter.com/AbhirMohanta',
+      url: process.env.NEXT_PUBLIC_TWITTER_URL || 'https://twitter.com/AbhirMohanta',
       icon: 'mdi:twitter',
       backgroundColor: '#1DA1F2',
     },
     {
       id: '5',
       title: 'Portfolio',
-      url: 'https://abirmahanta.framer.website',
+      url: process.env.NEXT_PUBLIC_PORTFOLIO_URL || 'https://abirmahanta.framer.website',
       icon: 'mdi:web',
       backgroundColor: '#4CAF50',
     }
   ],
 };
-
-// Initialize profile file if it doesn't exist
-async function ensureProfileFile() {
-  try {
-    await fs.access(path.dirname(PROFILE_FILE));
-  } catch {
-    await fs.mkdir(path.dirname(PROFILE_FILE), { recursive: true });
-  }
-
-  try {
-    await fs.access(PROFILE_FILE);
-  } catch {
-    await fs.writeFile(PROFILE_FILE, JSON.stringify(defaultProfile, null, 2));
-  }
-}
 
 // Validate profile data structure
 function validateProfile(data: any): data is Profile {
@@ -79,19 +60,11 @@ function validateProfile(data: any): data is Profile {
   return true;
 }
 
+let currentProfile = defaultProfile;
+
 export async function GET() {
   try {
-    await ensureProfileFile();
-    
-    const fileContent = await fs.readFile(PROFILE_FILE, 'utf-8');
-    const profile = JSON.parse(fileContent);
-
-    if (!validateProfile(profile)) {
-      console.error('Invalid profile data in file');
-      throw new Error('Invalid profile data structure');
-    }
-
-    return new NextResponse(JSON.stringify(profile), {
+    return new NextResponse(JSON.stringify(currentProfile), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
@@ -100,8 +73,6 @@ export async function GET() {
     });
   } catch (error) {
     console.error('Error reading profile:', error);
-    
-    // Return default profile if there's an error
     return new NextResponse(JSON.stringify(defaultProfile), {
       status: 200,
       headers: {
@@ -114,8 +85,6 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
-    await ensureProfileFile();
-    
     const contentType = request.headers.get('content-type');
     if (!contentType?.includes('application/json')) {
       return new NextResponse(JSON.stringify({ error: 'Content-Type must be application/json' }), {
@@ -133,13 +102,10 @@ export async function PUT(request: Request) {
       });
     }
 
-    // Ensure the data directory exists before writing
-    await fs.mkdir(path.dirname(PROFILE_FILE), { recursive: true });
+    // Update the current profile in memory
+    currentProfile = data;
     
-    // Write the profile data
-    await fs.writeFile(PROFILE_FILE, JSON.stringify(data, null, 2), 'utf-8');
-    
-    return new NextResponse(JSON.stringify({ success: true, profile: data }), {
+    return new NextResponse(JSON.stringify({ success: true, profile: currentProfile }), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
