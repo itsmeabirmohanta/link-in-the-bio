@@ -15,7 +15,7 @@ export default function Home() {
       {/* Main content */}
       <div className="w-full max-w-md relative">
         <Card className="backdrop-blur-sm bg-white/80 dark:bg-gray-900/80 border-0 shadow-2xl overflow-hidden">
-          <ProfileCard isAdmin={session?.user?.email === process.env.NEXT_PUBLIC_ALLOWED_EMAIL} />
+          <ProfileCard isAdmin={session?.user?.isAdmin ?? false} />
         </Card>
       </div>
     </main>

@@ -13,14 +13,27 @@ export const {
   ],
   secret: process.env.NEXTAUTH_SECRET,
   callbacks: {
-    async signIn({ user }) {
+    async signIn({ user, account, profile }) {
       // Debug logs
-      console.log('Attempting sign in for user:', user.email);
-      console.log('Allowed email:', process.env.ALLOWED_EMAIL);
-      console.log('Email match:', user.email === process.env.ALLOWED_EMAIL);
+      console.log('Sign-in attempt:', {
+        email: user.email,
+        allowedEmail: process.env.NEXT_PUBLIC_ALLOWED_EMAIL,
+        match: user.email === process.env.NEXT_PUBLIC_ALLOWED_EMAIL
+      });
       
-      return user.email === process.env.ALLOWED_EMAIL
+      // Only allow specific email
+      return user.email === process.env.NEXT_PUBLIC_ALLOWED_EMAIL;
     },
+    async session({ session, token }) {
+      // Add user's GitHub profile data to session
+      return {
+        ...session,
+        user: {
+          ...session.user,
+          isAdmin: session.user?.email === process.env.NEXT_PUBLIC_ALLOWED_EMAIL
+        }
+      }
+    }
   },
   pages: {
     signIn: '/auth/signin',
