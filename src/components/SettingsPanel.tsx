@@ -55,26 +55,49 @@ export default function SettingsPanel({ profile, onUpdate, onClose, isOpen }: Se
 
     try {
       const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        if (result) {
-          setTempImage(result);
-          setIsCropping(true);
-        }
-      };
-      reader.onerror = () => {
-        toast.error('Failed to read image file');
-      };
+      
+      const loadImage = new Promise<string>((resolve, reject) => {
+        reader.onload = () => {
+          const result = reader.result;
+          if (typeof result === 'string' && result) {
+            resolve(result);
+          } else {
+            reject(new Error('Failed to read image'));
+          }
+        };
+        reader.onerror = () => reject(new Error('Failed to read image file'));
+      });
+
       reader.readAsDataURL(file);
+      const imageData = await loadImage;
+      
+      // Validate that the image loads correctly
+      const img = new Image();
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error('Invalid image format'));
+        img.src = imageData;
+      });
+
+      setTempImage(imageData);
+      setIsCropping(true);
+      setCrop({
+        unit: '%',
+        width: 100,
+        height: 100,
+        x: 0,
+        y: 0,
+      });
     } catch (error) {
       console.error('Error uploading image:', error);
-      toast.error('Failed to process image');
+      toast.error(error instanceof Error ? error.message : 'Failed to process image');
     }
   };
 
   const getCroppedImage = async (sourceImage: string, cropConfig: CropType): Promise<string> => {
     return new Promise((resolve, reject) => {
       const image = new Image();
+      
       image.onload = () => {
         try {
           const canvas = document.createElement('canvas');
@@ -88,8 +111,8 @@ export default function SettingsPanel({ profile, onUpdate, onClose, isOpen }: Se
           const scaleY = image.naturalHeight / image.height;
           const pixelRatio = window.devicePixelRatio;
 
-          canvas.width = cropConfig.width * scaleX;
-          canvas.height = cropConfig.height * scaleY;
+          canvas.width = Math.floor(cropConfig.width * scaleX);
+          canvas.height = Math.floor(cropConfig.height * scaleY);
 
           ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
           ctx.imageSmoothingQuality = 'high';
@@ -108,11 +131,19 @@ export default function SettingsPanel({ profile, onUpdate, onClose, isOpen }: Se
 
           // Convert to WebP for better compression while maintaining quality
           const croppedImage = canvas.toDataURL('image/webp', 0.9);
+          
+          // Validate the output
+          if (!croppedImage.startsWith('data:image/')) {
+            reject(new Error('Failed to generate image'));
+            return;
+          }
+
           resolve(croppedImage);
         } catch (error) {
           reject(error);
         }
       };
+
       image.onerror = () => reject(new Error('Failed to load image'));
       image.src = sourceImage;
     });
@@ -129,7 +160,7 @@ export default function SettingsPanel({ profile, onUpdate, onClose, isOpen }: Se
       toast.success('Image cropped successfully');
     } catch (error) {
       console.error('Error cropping image:', error);
-      toast.error('Failed to crop image');
+      toast.error(error instanceof Error ? error.message : 'Failed to crop image');
       setTempImage(null);
       setIsCropping(false);
     }
@@ -137,11 +168,39 @@ export default function SettingsPanel({ profile, onUpdate, onClose, isOpen }: Se
 
   const handleSave = async () => {
     try {
+      // Validate profile data before saving
+      if (!editedProfile.name.trim()) {
+        toast.error('Name is required');
+        return;
+      }
+      if (!editedProfile.bio.trim()) {
+        toast.error('Bio is required');
+        return;
+      }
+      if (!editedProfile.avatar) {
+        toast.error('Profile picture is required');
+        return;
+      }
+      
+      // Validate links
+      for (const link of editedProfile.links) {
+        if (!link.title.trim() || !link.url.trim() || !link.icon.trim()) {
+          toast.error('All social link fields are required');
+          return;
+        }
+        try {
+          new URL(link.url); // Validate URL format
+        } catch {
+          toast.error('Invalid URL format in social links');
+          return;
+        }
+      }
+
       onUpdate(editedProfile);
       onClose();
     } catch (error) {
       console.error('Error saving profile:', error);
-      toast.error('Failed to save changes');
+      toast.error(error instanceof Error ? error.message : 'Failed to save changes');
     }
   };
 

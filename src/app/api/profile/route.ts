@@ -52,13 +52,31 @@ const defaultProfile = {
 // Initialize profile file if it doesn't exist
 async function ensureProfileFile() {
   try {
-    await fs.access(PROFILE_FILE);
-  } catch (error) {
-    // Create the directory if it doesn't exist
+    await fs.access(path.dirname(PROFILE_FILE));
+  } catch {
     await fs.mkdir(path.dirname(PROFILE_FILE), { recursive: true });
-    // Write default profile
+  }
+
+  try {
+    await fs.access(PROFILE_FILE);
+  } catch {
     await fs.writeFile(PROFILE_FILE, JSON.stringify(defaultProfile, null, 2));
   }
+}
+
+// Validate profile data structure
+function validateProfile(data: any): data is Profile {
+  if (!data || typeof data !== 'object') return false;
+  if (typeof data.name !== 'string' || !data.name) return false;
+  if (typeof data.bio !== 'string' || !data.bio) return false;
+  if (typeof data.avatar !== 'string' || !data.avatar) return false;
+  if (!Array.isArray(data.links)) return false;
+
+  for (const link of data.links) {
+    if (!link.id || !link.title || !link.url || !link.icon || !link.backgroundColor) return false;
+  }
+
+  return true;
 }
 
 export async function GET() {
@@ -68,8 +86,8 @@ export async function GET() {
     const fileContent = await fs.readFile(PROFILE_FILE, 'utf-8');
     const profile = JSON.parse(fileContent);
 
-    // Validate profile structure
-    if (!profile || typeof profile !== 'object') {
+    if (!validateProfile(profile)) {
+      console.error('Invalid profile data in file');
       throw new Error('Invalid profile data structure');
     }
 
@@ -77,6 +95,7 @@ export async function GET() {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
+        'Cache-Control': 'no-store',
       },
     });
   } catch (error) {
@@ -87,6 +106,7 @@ export async function GET() {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
+        'Cache-Control': 'no-store',
       },
     });
   }
@@ -96,43 +116,43 @@ export async function PUT(request: Request) {
   try {
     await ensureProfileFile();
     
-    const profile: Profile = await request.json();
-    
-    // Validate the profile data
-    if (!profile || typeof profile !== 'object') {
-      return new NextResponse(JSON.stringify({ error: 'Invalid profile data format' }), {
+    const contentType = request.headers.get('content-type');
+    if (!contentType?.includes('application/json')) {
+      return new NextResponse(JSON.stringify({ error: 'Content-Type must be application/json' }), {
         status: 400,
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
       });
     }
 
-    if (!profile.name || !profile.bio || !profile.avatar || !Array.isArray(profile.links)) {
-      return new NextResponse(JSON.stringify({ error: 'Missing required profile fields' }), {
+    const data = await request.json();
+    
+    if (!validateProfile(data)) {
+      return new NextResponse(JSON.stringify({ error: 'Invalid profile data structure' }), {
         status: 400,
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
       });
     }
 
-    // Save the profile
-    await fs.writeFile(PROFILE_FILE, JSON.stringify(profile, null, 2));
+    // Ensure the data directory exists before writing
+    await fs.mkdir(path.dirname(PROFILE_FILE), { recursive: true });
     
-    return new NextResponse(JSON.stringify({ success: true }), {
+    // Write the profile data
+    await fs.writeFile(PROFILE_FILE, JSON.stringify(data, null, 2), 'utf-8');
+    
+    return new NextResponse(JSON.stringify({ success: true, profile: data }), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
+        'Cache-Control': 'no-store',
       },
     });
   } catch (error) {
     console.error('Error updating profile:', error);
-    return new NextResponse(JSON.stringify({ error: 'Failed to update profile' }), {
+    return new NextResponse(JSON.stringify({ 
+      error: error instanceof Error ? error.message : 'Failed to update profile'
+    }), {
       status: 500,
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
     });
   }
 } 
