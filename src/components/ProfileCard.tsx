@@ -21,32 +21,49 @@ export function ProfileCard() {
   const router = useRouter()
 
   useEffect(() => {
-    try {
-      // Load profile data
-      const savedProfile = localStorage.getItem('profile')
-      if (savedProfile) {
-        setProfile(JSON.parse(savedProfile))
+    const loadData = async () => {
+      try {
+        // Load profile data from API
+        const response = await fetch('/api/profile');
+        if (response.ok) {
+          const profileData = await response.json();
+          setProfile(profileData);
+        }
+        
+        // Check authentication status
+        const localAuth = localStorage.getItem('isAuthenticated')
+        const sessionAuth = sessionStorage.getItem('isAuthenticated')
+        setIsAuthenticated(localAuth === 'true' || sessionAuth === 'true')
+      } catch (error) {
+        console.error('Error loading data:', error)
+      } finally {
+        setIsLoading(false)
       }
-      
-      // Check authentication status
-      const localAuth = localStorage.getItem('isAuthenticated')
-      const sessionAuth = sessionStorage.getItem('isAuthenticated')
-      setIsAuthenticated(localAuth === 'true' || sessionAuth === 'true')
-    } catch (error) {
-      console.error('Error loading data:', error)
-    } finally {
-      setIsLoading(false)
-    }
+    };
+
+    loadData();
   }, [])
 
-  const handleProfileUpdate = (updatedProfile: Profile) => {
-    setProfile(updatedProfile)
+  const handleProfileUpdate = async (updatedProfile: Profile) => {
     try {
-      localStorage.setItem('profile', JSON.stringify(updatedProfile))
-      toast.success('Profile updated successfully')
+      const response = await fetch('/api/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updatedProfile),
+      });
+
+      if (response.ok) {
+        setProfile(updatedProfile);
+        toast.success('Profile updated successfully');
+      } else {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to update profile');
+      }
     } catch (error) {
-      console.error('Error saving profile:', error)
-      toast.error('Failed to save profile')
+      console.error('Error saving profile:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to save profile');
     }
   }
 
