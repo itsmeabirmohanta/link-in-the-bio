@@ -20,9 +20,6 @@ const nextConfig = {
   poweredByHeader: false,
   experimental: {
     optimizePackageImports: ['@iconify/react', 'lucide-react'],
-  },
-  env: {
-    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   }
 }
 
