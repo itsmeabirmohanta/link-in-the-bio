@@ -22,16 +22,18 @@ export function ProfileCard() {
 
   useEffect(() => {
     try {
+      // Load profile data
       const savedProfile = localStorage.getItem('profile')
-      const authStatus = localStorage.getItem('isAuthenticated')
-      
       if (savedProfile) {
         setProfile(JSON.parse(savedProfile))
       }
       
-      setIsAuthenticated(authStatus === 'true')
+      // Check authentication status
+      const localAuth = localStorage.getItem('isAuthenticated')
+      const sessionAuth = sessionStorage.getItem('isAuthenticated')
+      setIsAuthenticated(localAuth === 'true' || sessionAuth === 'true')
     } catch (error) {
-      console.error('Error loading profile:', error)
+      console.error('Error loading data:', error)
     } finally {
       setIsLoading(false)
     }
@@ -57,7 +59,12 @@ export function ProfileCard() {
   }
 
   const handleSignOut = () => {
+    // Clear both storage types
     localStorage.removeItem('isAuthenticated')
+    localStorage.removeItem('username')
+    sessionStorage.removeItem('isAuthenticated')
+    sessionStorage.removeItem('username')
+    
     setIsAuthenticated(false)
     setIsSettingsOpen(false)
     toast.success('Signed out successfully')
@@ -101,6 +108,7 @@ export function ProfileCard() {
               size="icon"
               className="h-10 w-10 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm"
               onClick={handleSignOut}
+              title="Sign Out"
             >
               <Icon icon="solar:logout-linear" className="h-5 w-5" />
             </Button>
