@@ -23,12 +23,21 @@ export function ProfileCard() {
   useEffect(() => {
     const loadData = async () => {
       try {
+        setIsLoading(true);
         // Load profile data from API
         const response = await fetch('/api/profile');
-        if (response.ok) {
-          const profileData = await response.json();
-          setProfile(profileData);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
+        const text = await response.text();
+        if (!text) {
+          throw new Error('Empty response received');
+        }
+        const profileData = JSON.parse(text);
+        if (!profileData || typeof profileData !== 'object') {
+          throw new Error('Invalid profile data received');
+        }
+        setProfile(profileData);
         
         // Check authentication status
         const localAuth = localStorage.getItem('isAuthenticated')
@@ -36,6 +45,7 @@ export function ProfileCard() {
         setIsAuthenticated(localAuth === 'true' || sessionAuth === 'true')
       } catch (error) {
         console.error('Error loading data:', error)
+        toast.error('Failed to load profile data')
       } finally {
         setIsLoading(false)
       }
@@ -54,13 +64,13 @@ export function ProfileCard() {
         body: JSON.stringify(updatedProfile),
       });
 
-      if (response.ok) {
-        setProfile(updatedProfile);
-        toast.success('Profile updated successfully');
-      } else {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to update profile');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error occurred' }));
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
+
+      setProfile(updatedProfile);
+      toast.success('Profile updated successfully');
     } catch (error) {
       console.error('Error saving profile:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to save profile');
