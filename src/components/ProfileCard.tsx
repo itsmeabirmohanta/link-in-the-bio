@@ -24,6 +24,18 @@ export function ProfileCard() {
     const loadData = async () => {
       try {
         setIsLoading(true);
+        
+        // Try to load from localStorage first
+        const localProfile = localStorage.getItem('profile');
+        if (localProfile) {
+          try {
+            const parsedProfile = JSON.parse(localProfile);
+            setProfile(parsedProfile);
+          } catch (e) {
+            console.error('Error parsing local profile:', e);
+          }
+        }
+
         // Load profile data from API
         const response = await fetch('/api/profile');
         if (!response.ok) {
@@ -37,7 +49,10 @@ export function ProfileCard() {
         if (!profileData || typeof profileData !== 'object') {
           throw new Error('Invalid profile data received');
         }
+        
+        // Update both state and localStorage
         setProfile(profileData);
+        localStorage.setItem('profile', JSON.stringify(profileData));
         
         // Check authentication status
         const localAuth = localStorage.getItem('isAuthenticated')
@@ -56,6 +71,10 @@ export function ProfileCard() {
 
   const handleProfileUpdate = async (updatedProfile: Profile) => {
     try {
+      // Update localStorage first for immediate feedback
+      localStorage.setItem('profile', JSON.stringify(updatedProfile));
+      setProfile(updatedProfile);
+
       const response = await fetch('/api/profile', {
         method: 'PUT',
         headers: {
@@ -69,10 +88,19 @@ export function ProfileCard() {
         throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
 
-      setProfile(updatedProfile);
       toast.success('Profile updated successfully');
     } catch (error) {
       console.error('Error saving profile:', error);
+      // Revert changes if API update fails
+      const localProfile = localStorage.getItem('profile');
+      if (localProfile) {
+        try {
+          const parsedProfile = JSON.parse(localProfile);
+          setProfile(parsedProfile);
+        } catch (e) {
+          console.error('Error reverting profile:', e);
+        }
+      }
       toast.error(error instanceof Error ? error.message : 'Failed to save profile');
     }
   }

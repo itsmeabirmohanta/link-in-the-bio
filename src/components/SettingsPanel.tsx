@@ -1,12 +1,11 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react';
-import { Profile, SocialLink } from '@/types/social';
+import { useState, useEffect } from 'react';
+import { Profile } from '@/types/social';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Icon } from '@iconify/react';
 import { X, Upload, Check } from 'lucide-react';
 import { ChangeEvent } from 'react';
 import { createPortal } from 'react-dom';
@@ -38,67 +37,112 @@ export default function SettingsPanel({ profile, onUpdate, onClose, isOpen }: Se
     setEditedProfile(profile);
   }, [profile]);
 
-  const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please upload an image file');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size should be less than 5MB');
+      return;
+    }
+
+    try {
       const reader = new FileReader();
       reader.onload = () => {
-        setTempImage(reader.result as string);
-        setIsCropping(true);
+        const result = reader.result as string;
+        if (result) {
+          setTempImage(result);
+          setIsCropping(true);
+        }
+      };
+      reader.onerror = () => {
+        toast.error('Failed to read image file');
       };
       reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      toast.error('Failed to process image');
     }
   };
 
   const getCroppedImage = async (sourceImage: string, cropConfig: CropType): Promise<string> => {
-    const image = new Image();
-    image.src = sourceImage;
-    
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
+      const image = new Image();
       image.onload = () => {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return resolve(sourceImage);
+        try {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Failed to get canvas context'));
+            return;
+          }
 
-        const scaleX = image.naturalWidth / image.width;
-        const scaleY = image.naturalHeight / image.height;
-        const pixelRatio = window.devicePixelRatio;
+          const scaleX = image.naturalWidth / image.width;
+          const scaleY = image.naturalHeight / image.height;
+          const pixelRatio = window.devicePixelRatio;
 
-        canvas.width = cropConfig.width * scaleX;
-        canvas.height = cropConfig.height * scaleY;
+          canvas.width = cropConfig.width * scaleX;
+          canvas.height = cropConfig.height * scaleY;
 
-        ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-        ctx.imageSmoothingQuality = 'high';
+          ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+          ctx.imageSmoothingQuality = 'high';
 
-        ctx.drawImage(
-          image,
-          cropConfig.x * scaleX,
-          cropConfig.y * scaleY,
-          cropConfig.width * scaleX,
-          cropConfig.height * scaleY,
-          0,
-          0,
-          cropConfig.width * scaleX,
-          cropConfig.height * scaleY
-        );
+          ctx.drawImage(
+            image,
+            cropConfig.x * scaleX,
+            cropConfig.y * scaleY,
+            cropConfig.width * scaleX,
+            cropConfig.height * scaleY,
+            0,
+            0,
+            cropConfig.width * scaleX,
+            cropConfig.height * scaleY
+          );
 
-        resolve(canvas.toDataURL('image/jpeg', 0.9));
+          // Convert to WebP for better compression while maintaining quality
+          const croppedImage = canvas.toDataURL('image/webp', 0.9);
+          resolve(croppedImage);
+        } catch (error) {
+          reject(error);
+        }
       };
+      image.onerror = () => reject(new Error('Failed to load image'));
+      image.src = sourceImage;
     });
   };
 
   const handleCropComplete = async () => {
-    if (tempImage) {
+    if (!tempImage) return;
+
+    try {
       const croppedImage = await getCroppedImage(tempImage, crop);
       setEditedProfile(prev => ({ ...prev, avatar: croppedImage }));
+      setTempImage(null);
+      setIsCropping(false);
+      toast.success('Image cropped successfully');
+    } catch (error) {
+      console.error('Error cropping image:', error);
+      toast.error('Failed to crop image');
       setTempImage(null);
       setIsCropping(false);
     }
   };
 
-  const handleSave = () => {
-    onUpdate(editedProfile);
-    onClose();
+  const handleSave = async () => {
+    try {
+      onUpdate(editedProfile);
+      onClose();
+    } catch (error) {
+      console.error('Error saving profile:', error);
+      toast.error('Failed to save changes');
+    }
   };
 
   return createPortal(
