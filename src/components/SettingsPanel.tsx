@@ -47,9 +47,9 @@ export default function SettingsPanel({ profile, onUpdate, onClose, isOpen }: Se
       return;
     }
 
-    // Validate file size (max 2MB)
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error('Image size should be less than 2MB');
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size should be less than 5MB');
       return;
     }
 
@@ -72,7 +72,7 @@ export default function SettingsPanel({ profile, onUpdate, onClose, isOpen }: Se
       const imageData = await loadImage;
 
       // Pre-process image to ensure it's not too large
-      const img = new Image();
+      const img = document.createElement('img');
       await new Promise<void>((resolve, reject) => {
         img.onload = () => {
           try {
@@ -127,7 +127,7 @@ export default function SettingsPanel({ profile, onUpdate, onClose, isOpen }: Se
 
   const getCroppedImage = async (sourceImage: string, cropConfig: CropType): Promise<string> => {
     return new Promise((resolve, reject) => {
-      const image = new Image();
+      const image = document.createElement('img');
       
       image.onload = () => {
         try {
@@ -191,7 +191,7 @@ export default function SettingsPanel({ profile, onUpdate, onClose, isOpen }: Se
       
       // Validate the cropped image size
       const base64Size = croppedImage.length * 0.75; // Approximate size in bytes
-      if (base64Size > 2 * 1024 * 1024) { // 2MB limit
+      if (base64Size > 5 * 1024 * 1024) { // 5MB limit
         throw new Error('Cropped image is too large. Please try a smaller selection.');
       }
 
@@ -305,7 +305,7 @@ export default function SettingsPanel({ profile, onUpdate, onClose, isOpen }: Se
                       className="w-full cursor-pointer"
                     />
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Max size: 2MB. Supported formats: JPEG, PNG
+                      Max size: 5MB. Supported formats: JPEG, PNG
                     </p>
                   </div>
                 </div>
