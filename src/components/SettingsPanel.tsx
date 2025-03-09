@@ -195,10 +195,27 @@ export default function SettingsPanel({ profile, onUpdate, onClose, isOpen }: Se
         throw new Error('Cropped image is too large. Please try a smaller selection.');
       }
 
-      setEditedProfile(prev => ({ ...prev, avatar: croppedImage }));
+      // Update both state and localStorage
+      const updatedProfile = { ...editedProfile, avatar: croppedImage };
+      setEditedProfile(updatedProfile);
+      
+      // Update localStorage immediately
+      try {
+        const existingData = localStorage.getItem('profile');
+        if (existingData) {
+          const parsedData = JSON.parse(existingData);
+          localStorage.setItem('profile', JSON.stringify({
+            ...parsedData,
+            avatar: croppedImage
+          }));
+        }
+      } catch (storageError) {
+        console.error('Error updating localStorage:', storageError);
+      }
+
       setTempImage(null);
       setIsCropping(false);
-      toast.success('Image cropped successfully');
+      toast.success('Image updated successfully');
     } catch (error) {
       console.error('Error cropping image:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to crop image');
@@ -237,8 +254,18 @@ export default function SettingsPanel({ profile, onUpdate, onClose, isOpen }: Se
         }
       }
 
+      // Update localStorage with all changes
+      try {
+        localStorage.setItem('profile', JSON.stringify(editedProfile));
+      } catch (storageError) {
+        console.error('Error updating localStorage:', storageError);
+        toast.error('Failed to save changes to local storage');
+        return;
+      }
+
       onUpdate(editedProfile);
       onClose();
+      toast.success('Profile updated successfully');
     } catch (error) {
       console.error('Error saving profile:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to save changes');
