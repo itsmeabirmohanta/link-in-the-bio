@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { X, Upload, Check } from 'lucide-react';
+import { X, Check } from 'lucide-react';
 import { ChangeEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
@@ -297,19 +297,16 @@ export default function SettingsPanel({ profile, onUpdate, onClose, isOpen }: Se
                       unoptimized
                     />
                   </div>
-                  <div>
-                    <label className="cursor-pointer">
-                      <Input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleImageUpload}
-                        className="hidden"
-                      />
-                      <Button variant="outline" className="gap-2">
-                        <Upload className="h-4 w-4" />
-                        Upload Image
-                      </Button>
-                    </label>
+                  <div className="flex flex-col gap-2">
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="w-full cursor-pointer"
+                    />
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Max size: 2MB. Supported formats: JPEG, PNG
+                    </p>
                   </div>
                 </div>
               </div>
