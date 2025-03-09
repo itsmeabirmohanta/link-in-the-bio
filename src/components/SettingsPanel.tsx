@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { X, Check } from 'lucide-react';
+import { X, Check, RotateCcw } from 'lucide-react';
 import { ChangeEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
@@ -325,12 +325,44 @@ export default function SettingsPanel({ profile, onUpdate, onClose, isOpen }: Se
                     />
                   </div>
                   <div className="flex flex-col gap-2">
-                    <Input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageUpload}
-                      className="w-full cursor-pointer"
-                    />
+                    <div className="flex gap-2">
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="w-full cursor-pointer"
+                      />
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => {
+                          const defaultAvatar = process.env.NEXT_PUBLIC_DEFAULT_AVATAR;
+                          if (defaultAvatar) {
+                            const updatedProfile = { ...editedProfile, avatar: defaultAvatar };
+                            setEditedProfile(updatedProfile);
+                            
+                            // Update localStorage
+                            try {
+                              const existingData = localStorage.getItem('profile');
+                              if (existingData) {
+                                const parsedData = JSON.parse(existingData);
+                                localStorage.setItem('profile', JSON.stringify({
+                                  ...parsedData,
+                                  avatar: defaultAvatar
+                                }));
+                              }
+                              toast.success('Profile picture reset to default');
+                            } catch (error) {
+                              console.error('Error updating localStorage:', error);
+                              toast.error('Failed to reset profile picture');
+                            }
+                          }
+                        }}
+                        title="Reset to default picture"
+                      >
+                        <RotateCcw className="h-4 w-4" />
+                      </Button>
+                    </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
                       Max size: 5MB. Supported formats: JPEG, PNG
                     </p>
