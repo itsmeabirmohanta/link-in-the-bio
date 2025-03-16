@@ -7,6 +7,7 @@ const config: Config = {
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
   ],
+  darkMode: ['class'],
   theme: {
     extend: {
       colors: {
@@ -31,6 +32,8 @@ const config: Config = {
       backgroundImage: {
         'grid-stone-900': 'radial-gradient(circle, rgb(28 25 23) 1px, transparent 1px)',
         'grid-stone-50': 'radial-gradient(circle, rgb(250 250 249) 1px, transparent 1px)',
+        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
+        'gradient-conic': 'conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))',
       },
     },
   },
