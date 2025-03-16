@@ -34,8 +34,10 @@ export default function SettingsPanel({ profile, onUpdate, onClose, isOpen }: Se
   });
 
   useEffect(() => {
-    setEditedProfile(profile);
-  }, [profile]);
+    if (isOpen) {
+      setEditedProfile(profile);
+    }
+  }, [isOpen, profile]);
 
   const handleImageUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -208,6 +210,7 @@ export default function SettingsPanel({ profile, onUpdate, onClose, isOpen }: Se
             ...parsedData,
             avatar: croppedImage
           }));
+          onUpdate(updatedProfile); // Notify parent component
         }
       } catch (storageError) {
         console.error('Error updating localStorage:', storageError);
@@ -257,18 +260,41 @@ export default function SettingsPanel({ profile, onUpdate, onClose, isOpen }: Se
       // Update localStorage with all changes
       try {
         localStorage.setItem('profile', JSON.stringify(editedProfile));
+        onUpdate(editedProfile); // Notify parent component
+        onClose();
+        toast.success('Profile updated successfully');
       } catch (storageError) {
         console.error('Error updating localStorage:', storageError);
         toast.error('Failed to save changes to local storage');
-        return;
       }
-
-      onUpdate(editedProfile);
-      onClose();
-      toast.success('Profile updated successfully');
     } catch (error) {
       console.error('Error saving profile:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to save changes');
+    }
+  };
+
+  const resetToDefault = () => {
+    const defaultAvatar = process.env.NEXT_PUBLIC_PROFILE_AVATAR || process.env.NEXT_PUBLIC_DEFAULT_AVATAR;
+    if (defaultAvatar) {
+      const updatedProfile = { ...editedProfile, avatar: defaultAvatar };
+      setEditedProfile(updatedProfile);
+      
+      // Update localStorage
+      try {
+        const existingData = localStorage.getItem('profile');
+        if (existingData) {
+          const parsedData = JSON.parse(existingData);
+          localStorage.setItem('profile', JSON.stringify({
+            ...parsedData,
+            avatar: defaultAvatar
+          }));
+          onUpdate(updatedProfile); // Notify parent component
+        }
+        toast.success('Profile picture reset to default');
+      } catch (error) {
+        console.error('Error updating localStorage:', error);
+        toast.error('Failed to reset profile picture');
+      }
     }
   };
 
@@ -335,29 +361,7 @@ export default function SettingsPanel({ profile, onUpdate, onClose, isOpen }: Se
                       <Button
                         variant="outline"
                         size="icon"
-                        onClick={() => {
-                          const defaultAvatar = process.env.NEXT_PUBLIC_DEFAULT_AVATAR;
-                          if (defaultAvatar) {
-                            const updatedProfile = { ...editedProfile, avatar: defaultAvatar };
-                            setEditedProfile(updatedProfile);
-                            
-                            // Update localStorage
-                            try {
-                              const existingData = localStorage.getItem('profile');
-                              if (existingData) {
-                                const parsedData = JSON.parse(existingData);
-                                localStorage.setItem('profile', JSON.stringify({
-                                  ...parsedData,
-                                  avatar: defaultAvatar
-                                }));
-                              }
-                              toast.success('Profile picture reset to default');
-                            } catch (error) {
-                              console.error('Error updating localStorage:', error);
-                              toast.error('Failed to reset profile picture');
-                            }
-                          }
-                        }}
+                        onClick={resetToDefault}
                         title="Reset to default picture"
                       >
                         <RotateCcw className="h-4 w-4" />
